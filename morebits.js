@@ -2474,8 +2474,13 @@ Morebits.wiki.api.prototype = {
 
 };
 
-/** Retrieves wikitext from a page. Caching enabled, duration 1 day. */
-Morebits.wiki.getCachedJson = function(title) {
+/**
+ * Retrieves wikitext from a page. Caching is enabled with a duration of 1 day.
+ *
+ * @param {string} title - Page title
+ * @return {Promise<string|null>} Returns page content, or null if the page doesn't exist.
+ */
+Morebits.wiki.getCachedPage = function(title) {
 	const query = {
 		action: 'query',
 		prop: 'revisions',
@@ -2483,15 +2488,29 @@ Morebits.wiki.getCachedJson = function(title) {
 		rvslots: '*',
 		rvprop: 'content',
 		format: 'json',
+		formatversion: '2',
 		smaxage: '86400', // cache for 1 day
 		maxage: '86400' // cache for 1 day
 	};
 	return new Morebits.wiki.api('', query).post().then((apiobj) => {
 		apiobj.getStatusElement().unlink();
 		const response = apiobj.getResponse();
-		const wikitext = response.query.pages[0].revisions[0].slots.main.content;
-		return JSON.parse(wikitext);
+		const page = response.query.pages[0];
+		if (page.missing) {
+			return null;
+		}
+		return page.revisions[0].slots.main.content;
 	});
+};
+
+/**
+ * Retrieves JSON from a page. Caching is enabled with a duration of 1 day.
+ *
+ * @param {string} title - Page title
+ * @return {Promise<string>}
+ */
+Morebits.wiki.getCachedJson = function(title) {
+	return Morebits.wiki.getCachedPage(title).then((wikitext) => JSON.parse(wikitext));
 };
 
 var morebitsWikiApiUserAgent = 'morebits.js ([[w:WT:TW]])';
@@ -4840,8 +4859,8 @@ Morebits.wikitext.parseTemplate = function(text, start) {
 			// In a parameter
 			if (equals !== -1) {
 				// We found an equals, so save the parameter as key: value
-				key = current.substring(0, equals).trim();
-				value = final ? current.substring(equals + 1, current.length - 2).trim() : current.substring(equals + 1).trim();
+				key = current.slice(0, Math.max(0, equals)).trim();
+				value = final ? current.substring(equals + 1, current.length - 2).trim() : current.slice(Math.max(0, equals + 1)).trim();
 				result.parameters[key] = value;
 				equals = -1;
 			} else {
